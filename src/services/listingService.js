@@ -1,6 +1,7 @@
 import {
   PropertyListing, SellerProfile, PropertyImage,
 } from '../models/index.js';
+import { PROPERTY_TYPES } from '../constants/index.js';
 import { AppError } from '../utils/errors.js';
 import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse, resolveSortField } from '../utils/apiResponse.js';
@@ -8,6 +9,23 @@ import config from '../config/index.js';
 import { sha256 } from '../utils/crypto.js';
 
 const SORT_ALIASES = { price: 'askingPrice', size: 'areaSqm' };
+
+const PROPERTY_TYPE_ALIASES = {
+  RESIDENTIAL: 'RESIDENTIAL_STAND',
+  COMMERCIAL: 'COMMERCIAL_STAND',
+  INDUSTRIAL: 'INDUSTRIAL_STAND',
+  AGRICULTURAL: 'AGRICULTURAL_LAND',
+};
+
+function normalizePropertyType(value) {
+  if (value == null || value === '') return value;
+  const upper = String(value).toUpperCase();
+  const mapped = PROPERTY_TYPE_ALIASES[upper] ?? upper;
+  if (!PROPERTY_TYPES.includes(mapped)) {
+    return 'OTHER';
+  }
+  return mapped;
+}
 
 function imageContentUrl(imageId) {
   return `/api/v1/listing-images/${imageId}/content`;
@@ -37,6 +55,9 @@ function normalizeListingInput(data) {
   }
   if (data.price != null && normalized.askingPrice == null) {
     normalized.askingPrice = data.price;
+  }
+  if (normalized.propertyType != null) {
+    normalized.propertyType = normalizePropertyType(normalized.propertyType);
   }
   return normalized;
 }
