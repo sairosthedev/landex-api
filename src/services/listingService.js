@@ -1,5 +1,5 @@
 import {
-  PropertyListing, SellerProfile, PropertyImage,
+  PropertyListing, SellerProfile, PropertyImage, Enquiry,
 } from '../models/index.js';
 import { PROPERTY_TYPES } from '../constants/index.js';
 import { AppError } from '../utils/errors.js';
@@ -7,6 +7,19 @@ import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse, resolveSortField } from '../utils/apiResponse.js';
 import config from '../config/index.js';
 import { sha256 } from '../utils/crypto.js';
+
+async function attachEnquiryCounts(listings, listingObjectIds) {
+  if (!listings.length) return listings;
+  const counts = await Enquiry.aggregate([
+    { $match: { listingId: { $in: listingObjectIds } } },
+    { $group: { _id: '$listingId', enquiryCount: { $sum: 1 } } },
+  ]);
+  const countByListing = new Map(counts.map((row) => [row._id.toString(), row.enquiryCount]));
+  return listings.map((row) => ({
+    ...row,
+    enquiryCount: countByListing.get(row.id) ?? 0,
+  }));
+}
 
 const SORT_ALIASES = { price: 'askingPrice', size: 'areaSqm' };
 
@@ -270,7 +283,10 @@ export async function getMyListings(userId, status, pagination) {
     PropertyListing.countDocuments(filter),
   ]);
 
-  const content = await attachListingImages(items);
+  const content = await attachEnquiryCounts(
+    await attachListingImages(items),
+    items.map((listing) => listing._id),
+  );
   return pageResponse(content, page, size, total);
 }
 
@@ -289,7 +305,11 @@ export async function getListing(listingId, userId, incrementView) {
   }
 
   const images = await PropertyImage.find({ listingId, active: true }).sort({ sortOrder: 1 });
-  return toListingResponse(listing, images);
+  const response = toListingResponse(listing, images);
+  if (isOwner) {
+    response.enquiryCount = await Enquiry.countDocuments({ listingId: listing._id });
+  }
+  return response;
 }
 
 export async function uploadListingImage(userId, listingId, file, altText) {

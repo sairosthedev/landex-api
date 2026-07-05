@@ -37,7 +37,8 @@ router.get('/mine', requireAuth, requireRoles('SELLER', 'ADMIN'), async (req, re
 });
 
 router.get('/:id', optionalAuth, async (req, res) => {
-  const listing = await listingService.getListing(req.params.id, req.user?.id, true);
+  const countView = req.query.countView !== 'false';
+  const listing = await listingService.getListing(req.params.id, req.user?.id, countView);
   res.json(success(listing));
 });
 
