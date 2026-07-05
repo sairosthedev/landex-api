@@ -2,9 +2,46 @@ import config from '../config/index.js';
 import {
   FeeSchedule, Invoice, Payment, PaymentWebhookEvent, ReconciliationRun, Notification,
 } from '../models/index.js';
+import { DEFAULT_FEE_SCHEDULE } from '../constants/index.js';
 import { AppError } from '../utils/errors.js';
 import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse } from '../utils/apiResponse.js';
+
+const PURPOSE_TO_FEE_CODE = {
+  LISTING: 'LISTING_PUBLISH',
+  VERIFICATION: 'VERIFICATION',
+  SUBSCRIPTION: 'PREMIUM_LISTING',
+};
+
+const PURPOSE_TO_REFERENCE_TYPE = {
+  LISTING: 'LISTING',
+  VERIFICATION: 'LISTING',
+  SUBSCRIPTION: 'USER',
+};
+
+function resolveFeeCode(data) {
+  if (data.feeCode) return String(data.feeCode).toUpperCase();
+  if (data.purpose) return PURPOSE_TO_FEE_CODE[String(data.purpose).toUpperCase()] ?? null;
+  return null;
+}
+
+function resolveReferenceType(data) {
+  if (data.referenceType) return data.referenceType;
+  if (data.purpose) {
+    return PURPOSE_TO_REFERENCE_TYPE[String(data.purpose).toUpperCase()] ?? 'LISTING';
+  }
+  return 'LISTING';
+}
+
+export async function ensureDefaultFeeSchedules() {
+  for (const fee of DEFAULT_FEE_SCHEDULE) {
+    await FeeSchedule.findOneAndUpdate(
+      { feeCode: fee.feeCode },
+      { ...fee, active: true },
+      { upsert: true },
+    );
+  }
+}
 
 function toInvoiceResponse(inv) {
   return {
@@ -24,7 +61,14 @@ function toInvoiceResponse(inv) {
 }
 
 export async function createInvoice(userId, data) {
-  const fee = await FeeSchedule.findOne({ feeCode: data.feeCode, active: true });
+  await ensureDefaultFeeSchedules();
+
+  const feeCode = resolveFeeCode(data);
+  if (!feeCode) {
+    throw AppError.badRequest('INVALID_FEE', 'feeCode or purpose is required');
+  }
+
+  const fee = await FeeSchedule.findOne({ feeCode, active: true });
   if (!fee) throw AppError.notFound('Fee schedule not found');
 
   const dueDate = new Date();
@@ -36,7 +80,7 @@ export async function createInvoice(userId, data) {
     feeCode: fee.feeCode,
     amount: fee.amount,
     currency: fee.currency || config.payment.defaultCurrency,
-    referenceType: data.referenceType,
+    referenceType: resolveReferenceType(data),
     referenceId: data.referenceId,
     dueDate,
   });

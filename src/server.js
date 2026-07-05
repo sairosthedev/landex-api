@@ -1,10 +1,12 @@
 import app from './app.js';
 import config, { validateConfig } from './config/index.js';
 import { connectDatabase } from './config/database.js';
+import { ensureDefaultFeeSchedules } from './services/paymentService.js';
 
 async function start() {
   validateConfig();
   await connectDatabase();
+  await ensureDefaultFeeSchedules();
   app.listen(config.port, () => {
     console.log(`LandEx MERN API listening on port ${config.port}`);
   });
