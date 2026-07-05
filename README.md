@@ -106,7 +106,30 @@ See `.env.example` for the full list. Key variables:
 Default `LISTING_IMAGE_STORAGE=mongodb` stores image bytes in MongoDB Atlas (free tier friendly).
 No S3 or `uploads/` folder required. Seller uploads work on serverless deployments.
 Set `LISTING_IMAGE_STORAGE=object` only when `OBJECT_STORAGE_PROVIDER` is S3/MinIO.
+
 | `npm run smoke` | Run API smoke tests |
+
+## Deploy on Vercel
+
+1. Import `landex-api` repo into Vercel
+2. Set **Environment Variables** (Production):
+
+| Variable | Example |
+|----------|---------|
+| `MONGODB_URI` | Your Atlas connection string |
+| `MONGODB_ATLAS_NETWORK_ACCESS` | `0.0.0.0/0` |
+| `JWT_SECRET` | min 32 chars |
+| `PII_ENCRYPTION_KEY` | Base64 256-bit AES key |
+| `FRONTEND_BASE_URL` | `https://your-frontend.vercel.app` |
+| `STORAGE_BASE_PATH` | `/tmp/storage` |
+| `OBJECT_STORAGE_BUCKET` | `landex-documents` |
+| `NOTIFICATION_FROM_EMAIL` | `dev@landex.local` |
+| `LISTING_IMAGE_STORAGE` | `mongodb` |
+
+3. In **MongoDB Atlas → Network Access**, allow `0.0.0.0/0` (required for Vercel)
+4. Redeploy after env changes
+
+`GET /health` returns `db: "connected"` when MongoDB is reachable.
 
 ## Frontend integration
 

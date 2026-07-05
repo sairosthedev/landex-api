@@ -5,6 +5,14 @@ import { optionalEnv, optionalInt, requireEnv } from './env.js';
 
 dotenv.config();
 
+const globalCache = globalThis;
+
+if (!globalCache.__landexMongoose) {
+  globalCache.__landexMongoose = { conn: null, promise: null };
+}
+
+const cached = globalCache.__landexMongoose;
+
 /** Matches Atlas Network Access → Allow Access from Anywhere (0.0.0.0/0). */
 function isAtlasAllowFromAnywhere() {
   const access = optionalEnv('MONGODB_ATLAS_NETWORK_ACCESS').toLowerCase();
@@ -35,11 +43,12 @@ function applyNetworkAndDnsPreferences() {
 }
 
 function getMongoOptions(uri) {
+  const onVercel = Boolean(process.env.VERCEL);
   const options = {
-    serverSelectionTimeoutMS: optionalInt('MONGODB_SERVER_SELECTION_TIMEOUT_MS', 30_000),
+    serverSelectionTimeoutMS: optionalInt('MONGODB_SERVER_SELECTION_TIMEOUT_MS', onVercel ? 20_000 : 30_000),
     socketTimeoutMS: optionalInt('MONGODB_SOCKET_TIMEOUT_MS', 45_000),
-    connectTimeoutMS: optionalInt('MONGODB_CONNECT_TIMEOUT_MS', 30_000),
-    maxPoolSize: optionalInt('MONGODB_MAX_POOL_SIZE', 10),
+    connectTimeoutMS: optionalInt('MONGODB_CONNECT_TIMEOUT_MS', onVercel ? 20_000 : 30_000),
+    maxPoolSize: optionalInt('MONGODB_MAX_POOL_SIZE', onVercel ? 1 : 10),
   };
 
   const family = optionalEnv('MONGODB_FAMILY');
@@ -63,26 +72,53 @@ async function connectWithUri(uri, options) {
   await mongoose.connect(uri, options);
 }
 
+function resetCache() {
+  cached.conn = null;
+  cached.promise = null;
+}
+
+export function isDatabaseConnected() {
+  return mongoose.connection.readyState === 1;
+}
+
 export async function connectDatabase() {
-  applyNetworkAndDnsPreferences();
-  mongoose.set('strictQuery', true);
-
-  const primaryUri = requireEnv('MONGODB_URI');
-  const fallbackUri = optionalEnv('MONGODB_URI_FALLBACK');
-  const options = getMongoOptions(primaryUri);
-
-  try {
-    await connectWithUri(primaryUri, options);
-  } catch (err) {
-    if (fallbackUri && isSrvDnsError(err)) {
-      console.warn('MongoDB SRV DNS lookup failed; retrying with MONGODB_URI_FALLBACK...');
-      await connectWithUri(fallbackUri, getMongoOptions(fallbackUri));
-    } else {
-      throw enrichMongoError(err);
-    }
+  if (cached.conn && isDatabaseConnected()) {
+    return cached.conn;
   }
 
-  console.log('MongoDB connected');
+  if (!cached.promise) {
+    applyNetworkAndDnsPreferences();
+    mongoose.set('strictQuery', true);
+
+    const primaryUri = requireEnv('MONGODB_URI');
+    const fallbackUri = optionalEnv('MONGODB_URI_FALLBACK');
+    const options = getMongoOptions(primaryUri);
+
+    cached.promise = (async () => {
+      try {
+        try {
+          await connectWithUri(primaryUri, options);
+        } catch (err) {
+          if (fallbackUri && isSrvDnsError(err)) {
+            console.warn('MongoDB SRV DNS lookup failed; retrying with MONGODB_URI_FALLBACK...');
+            await connectWithUri(fallbackUri, getMongoOptions(fallbackUri));
+          } else {
+            throw enrichMongoError(err);
+          }
+        }
+
+        mongoose.connection.once('disconnected', resetCache);
+        console.log('MongoDB connected');
+        cached.conn = mongoose.connection;
+        return cached.conn;
+      } catch (err) {
+        resetCache();
+        throw err;
+      }
+    })();
+  }
+
+  return cached.promise;
 }
 
 function enrichMongoError(err) {
@@ -100,5 +136,6 @@ function enrichMongoError(err) {
 }
 
 export async function disconnectDatabase() {
+  resetCache();
   await mongoose.disconnect();
 }

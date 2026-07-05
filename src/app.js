@@ -5,6 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
+import { connectDatabase, isDatabaseConnected } from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import listingRoutes from './routes/listingRoutes.js';
@@ -29,8 +30,32 @@ app.use(cors({
 }));
 app.use(morgan('dev'));
 
-app.get('/health', (_req, res) => {
-  res.json({ status: 'UP', timestamp: new Date().toISOString() });
+app.get('/health', async (_req, res) => {
+  try {
+    await connectDatabase();
+    res.json({
+      status: 'UP',
+      db: isDatabaseConnected() ? 'connected' : 'disconnected',
+      timestamp: new Date().toISOString(),
+    });
+  } catch (err) {
+    res.status(503).json({
+      status: 'DEGRADED',
+      db: 'disconnected',
+      message: err instanceof Error ? err.message : 'Database unavailable',
+      timestamp: new Date().toISOString(),
+    });
+  }
+});
+
+app.use(async (req, res, next) => {
+  if (!req.path.startsWith('/api/')) return next();
+  try {
+    await connectDatabase();
+    next();
+  } catch (err) {
+    next(err);
+  }
 });
 
 app.use('/api/v1/payments/webhooks', webhookRouter);
