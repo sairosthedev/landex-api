@@ -58,15 +58,26 @@ async function enrichVerificationResponse(req) {
 }
 
 export async function repairSubmittedListingStatuses() {
-  const requests = await VerificationRequest.find({
+  const submitted = await VerificationRequest.find({
     verificationType: 'LISTING',
     status: { $in: ['SUBMITTED', 'UNDER_REVIEW'] },
     listingId: { $ne: null },
   }).select('listingId');
 
-  await Promise.all(requests.map((request) => PropertyListing.updateOne(
+  await Promise.all(submitted.map((request) => PropertyListing.updateOne(
     { _id: request.listingId, deletedAt: null, status: 'DRAFT' },
     { status: 'PENDING_REVIEW' },
+  )));
+
+  const approved = await VerificationRequest.find({
+    verificationType: 'LISTING',
+    status: 'APPROVED',
+    listingId: { $ne: null },
+  }).select('listingId');
+
+  await Promise.all(approved.map((request) => PropertyListing.updateOne(
+    { _id: request.listingId, deletedAt: null, status: { $in: ['DRAFT', 'PENDING_REVIEW'] } },
+    { status: 'ACTIVE', verified: true, publishedAt: new Date() },
   )));
 }
 
@@ -224,6 +235,26 @@ export async function approve(userId, requestId, auditCtx) {
   request.completedAt = new Date();
   await request.save();
   await recordStatusChange(requestId, from, 'APPROVED', userId);
+
+  if (request.verificationType === 'LISTING' && request.listingId) {
+    const before = await PropertyListing.findById(request.listingId);
+    const listing = await PropertyListing.findOneAndUpdate(
+      { _id: request.listingId, deletedAt: null },
+      { status: 'ACTIVE', verified: true, publishedAt: new Date() },
+      { new: true },
+    );
+    if (auditCtx && listing) {
+      await auditService.recordAudit(auditCtx, {
+        action: 'APPROVE',
+        entitySchema: 'listing',
+        entityId: listing._id,
+        entityReference: listing.listingReference ?? listing.title,
+        beforeState: { status: before?.status },
+        afterState: { status: 'ACTIVE' },
+      });
+    }
+  }
+
   if (auditCtx) {
     await auditService.recordAudit(auditCtx, {
       action: 'APPROVE',
@@ -246,6 +277,26 @@ export async function reject(userId, requestId, reason, auditCtx) {
   request.completedAt = new Date();
   await request.save();
   await recordStatusChange(requestId, from, 'REJECTED', userId, reason);
+
+  if (request.verificationType === 'LISTING' && request.listingId) {
+    const before = await PropertyListing.findById(request.listingId);
+    const listing = await PropertyListing.findOneAndUpdate(
+      { _id: request.listingId, deletedAt: null },
+      { status: 'REJECTED', rejectionReason: reason },
+      { new: true },
+    );
+    if (auditCtx && listing) {
+      await auditService.recordAudit(auditCtx, {
+        action: 'REJECT',
+        entitySchema: 'listing',
+        entityId: listing._id,
+        entityReference: listing.listingReference ?? listing.title,
+        beforeState: { status: before?.status },
+        afterState: { status: 'REJECTED', reason },
+      });
+    }
+  }
+
   if (auditCtx) {
     await auditService.recordAudit(auditCtx, {
       action: 'REJECT',
