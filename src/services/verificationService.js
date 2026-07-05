@@ -4,6 +4,7 @@ import {
 import { AppError } from '../utils/errors.js';
 import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse } from '../utils/apiResponse.js';
+import * as auditService from './auditService.js';
 
 function toResponse(req) {
   return {
@@ -139,7 +140,7 @@ export async function requestMoreInfo(userId, requestId, reason) {
   return toResponse(request);
 }
 
-export async function approve(userId, requestId) {
+export async function approve(userId, requestId, auditCtx) {
   const request = await VerificationRequest.findById(requestId);
   if (!request) throw AppError.notFound('Verification request not found');
   const from = request.status;
@@ -147,10 +148,20 @@ export async function approve(userId, requestId) {
   request.completedAt = new Date();
   await request.save();
   await recordStatusChange(requestId, from, 'APPROVED', userId);
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'APPROVE',
+      entitySchema: 'verification',
+      entityId: request._id,
+      entityReference: request.requestReference,
+      beforeState: { status: from },
+      afterState: { status: 'APPROVED' },
+    });
+  }
   return toResponse(request);
 }
 
-export async function reject(userId, requestId, reason) {
+export async function reject(userId, requestId, reason, auditCtx) {
   const request = await VerificationRequest.findById(requestId);
   if (!request) throw AppError.notFound('Verification request not found');
   const from = request.status;
@@ -159,5 +170,15 @@ export async function reject(userId, requestId, reason) {
   request.completedAt = new Date();
   await request.save();
   await recordStatusChange(requestId, from, 'REJECTED', userId, reason);
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'REJECT',
+      entitySchema: 'verification',
+      entityId: request._id,
+      entityReference: request.requestReference,
+      beforeState: { status: from },
+      afterState: { status: 'REJECTED', reason },
+    });
+  }
   return toResponse(request);
 }

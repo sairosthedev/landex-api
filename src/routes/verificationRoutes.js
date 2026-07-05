@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { success, parsePagination } from '../utils/apiResponse.js';
 import { requireAuth, requireRoles } from '../middleware/auth.js';
 import * as verificationService from '../services/verificationService.js';
+import { auditContextFromReq } from '../services/auditService.js';
 
 const router = Router();
 const submitterRoles = requireRoles('SELLER', 'AGENT', 'CONVEYANCER', 'ADMIN');
@@ -49,11 +50,11 @@ router.post('/:id/request-more-info', requireAuth, reviewerRoles, async (req, re
 });
 
 router.post('/:id/approve', requireAuth, reviewerRoles, async (req, res) => {
-  res.json(success(await verificationService.approve(req.user.id, req.params.id)));
+  res.json(success(await verificationService.approve(req.user.id, req.params.id, auditContextFromReq(req))));
 });
 
 router.post('/:id/reject', requireAuth, reviewerRoles, async (req, res) => {
-  res.json(success(await verificationService.reject(req.user.id, req.params.id, req.body.reason)));
+  res.json(success(await verificationService.reject(req.user.id, req.params.id, req.body.reason, auditContextFromReq(req))));
 });
 
 export default router;

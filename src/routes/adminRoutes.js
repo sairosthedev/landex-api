@@ -5,6 +5,7 @@ import * as adminService from '../services/adminService.js';
 import * as trustService from '../services/trustService.js';
 import * as paymentService from '../services/paymentService.js';
 import * as userService from '../services/userService.js';
+import { auditContextFromReq } from '../services/auditService.js';
 
 const router = Router();
 const adminOnly = [requireAuth, requireRoles('ADMIN', 'SUPER_ADMIN')];
@@ -23,11 +24,11 @@ router.get('/users/:id/verification-status', ...adminOnly, async (req, res) => {
 });
 
 router.patch('/users/:id/status', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.updateUserStatus(req.params.id, req.body.status)));
+  res.json(success(await adminService.updateUserStatus(req.params.id, req.body.status, auditContextFromReq(req))));
 });
 
 router.put('/users/:id/status', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.updateUserStatus(req.params.id, req.body.status)));
+  res.json(success(await adminService.updateUserStatus(req.params.id, req.body.status, auditContextFromReq(req))));
 });
 
 router.patch('/users/:id/roles', ...adminOnly, async (req, res) => {
@@ -47,11 +48,11 @@ router.get('/users/:userId/kyc/documents/:documentId/download', ...adminOnly, as
 });
 
 router.post('/users/:id/kyc/approve', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.approveKyc(req.params.id, req.user.id)));
+  res.json(success(await adminService.approveKyc(req.params.id, req.user.id, auditContextFromReq(req))));
 });
 
 router.post('/users/:id/kyc/reject', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.rejectKyc(req.params.id, req.user.id, req.body.reason)));
+  res.json(success(await adminService.rejectKyc(req.params.id, req.user.id, req.body.reason, auditContextFromReq(req))));
 });
 
 // Listings
@@ -66,11 +67,11 @@ router.get('/listings/:id', ...adminOnly, async (req, res) => {
 });
 
 router.post('/listings/:id/approve', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.approveListing(req.params.id)));
+  res.json(success(await adminService.approveListing(req.params.id, auditContextFromReq(req))));
 });
 
 router.post('/listings/:id/reject', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.rejectListing(req.params.id, req.body.reason)));
+  res.json(success(await adminService.rejectListing(req.params.id, req.body.reason, auditContextFromReq(req))));
 });
 
 router.post('/listings/:id/withdraw', ...adminOnly, async (req, res) => {
@@ -127,7 +128,7 @@ router.get('/complaints/stats', ...adminOnly, async (req, res) => {
 });
 
 router.patch('/complaints/:id', ...adminOnly, async (req, res) => {
-  res.json(success(await trustService.updateComplaintStatus(req.params.id, req.body.status)));
+  res.json(success(await trustService.updateComplaintStatus(req.params.id, req.body.status, auditContextFromReq(req))));
 });
 
 // Referrals
@@ -142,7 +143,7 @@ router.get('/referrals/stats', ...adminOnly, async (req, res) => {
 });
 
 router.patch('/referrals/:id', ...adminOnly, async (req, res) => {
-  res.json(success(await trustService.updateReferralStatus(req.params.id, req.body.status)));
+  res.json(success(await trustService.updateReferralStatus(req.params.id, req.body.status, auditContextFromReq(req))));
 });
 
 export default router;

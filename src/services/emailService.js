@@ -1,7 +1,13 @@
 import nodemailer from 'nodemailer';
 import config from '../config/index.js';
+import { optionalEnv } from '../config/env.js';
 
 let transporter = null;
+
+/** Email delivery disabled by default — set EMAIL_ENABLED=true when SMTP is configured. */
+export function isEmailEnabled() {
+  return optionalEnv('EMAIL_ENABLED', 'false') === 'true' && Boolean(config.mail.password);
+}
 
 function getTransporter() {
   if (!transporter) {
@@ -18,8 +24,8 @@ function getTransporter() {
 }
 
 export async function sendEmail({ to, subject, html, text }) {
-  if (!config.mail.password) {
-    console.log(`[email stub] To: ${to}, Subject: ${subject}`);
+  if (!isEmailEnabled()) {
+    console.log(`[email disabled] To: ${to}, Subject: ${subject}`);
     return;
   }
   await getTransporter().sendMail({

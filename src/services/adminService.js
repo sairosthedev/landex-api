@@ -1,5 +1,5 @@
 import {
-  User, PropertyListing, KycDocument, AuditLog, Invoice, Payment,
+  User, PropertyListing, KycDocument, Invoice, Payment,
   VerificationRequest, Complaint, ContactRequest, UserKycStatus,
 } from '../models/index.js';
 import { AppError } from '../utils/errors.js';
@@ -7,6 +7,7 @@ import { pageResponse } from '../utils/apiResponse.js';
 import { localFileStorage } from './storageService.js';
 import * as listingService from './listingService.js';
 import * as paymentService from './paymentService.js';
+import * as auditService from './auditService.js';
 
 function toAdminUserResponse(user, kycStatus) {
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
@@ -32,7 +33,14 @@ async function kycStatusByUserIds(userIds) {
 }
 
 export async function logAudit(data) {
-  await AuditLog.create(data);
+  await auditService.recordAudit(
+    { actorId: data.actorId, actorEmail: data.actorEmail },
+    data,
+  );
+}
+
+export async function searchAuditLogs(pagination, filters = {}) {
+  return auditService.searchAuditLogs(pagination, filters);
 }
 
 export async function listUsers(pagination, filters = {}) {
@@ -69,11 +77,22 @@ export async function getUser(userId) {
   return toAdminUserResponse(user, kyc?.status);
 }
 
-export async function updateUserStatus(userId, status) {
+export async function updateUserStatus(userId, status, auditCtx) {
+  const before = await User.findById(userId).select('-passwordHash -nationalIdEnc');
+  if (!before) throw AppError.notFound('User not found');
   const user = await User.findByIdAndUpdate(userId, { status }, { new: true })
     .select('-passwordHash -nationalIdEnc');
-  if (!user) throw AppError.notFound('User not found');
   const kyc = await UserKycStatus.findOne({ userId });
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'UPDATE',
+      entitySchema: 'user',
+      entityId: user._id,
+      entityReference: user.email,
+      beforeState: { status: before.status },
+      afterState: { status },
+    });
+  }
   return toAdminUserResponse(user, kyc?.status);
 }
 
@@ -96,22 +115,42 @@ export async function downloadKycDocument(documentId) {
   return { buffer, contentType: doc.contentType, filename: doc.originalFilename };
 }
 
-export async function approveKyc(userId, adminId) {
-  const { UserKycStatus } = await import('../models/index.js');
-  return UserKycStatus.findOneAndUpdate(
+export async function approveKyc(userId, adminId, auditCtx) {
+  const user = await User.findById(userId).select('email');
+  const result = await UserKycStatus.findOneAndUpdate(
     { userId },
     { status: 'APPROVED', reviewedAt: new Date(), reviewedBy: adminId },
     { upsert: true, new: true },
   );
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'VERIFY',
+      entitySchema: 'kyc',
+      entityId: userId,
+      entityReference: user?.email ?? userId,
+      afterState: { status: 'APPROVED' },
+    });
+  }
+  return result;
 }
 
-export async function rejectKyc(userId, adminId, reason) {
-  const { UserKycStatus } = await import('../models/index.js');
-  return UserKycStatus.findOneAndUpdate(
+export async function rejectKyc(userId, adminId, reason, auditCtx) {
+  const user = await User.findById(userId).select('email');
+  const result = await UserKycStatus.findOneAndUpdate(
     { userId },
     { status: 'REJECTED', reviewedAt: new Date(), reviewedBy: adminId, rejectionReason: reason },
     { upsert: true, new: true },
   );
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'REJECT',
+      entitySchema: 'kyc',
+      entityId: userId,
+      entityReference: user?.email ?? userId,
+      afterState: { status: 'REJECTED', reason },
+    });
+  }
+  return result;
 }
 
 export async function listListings(pagination, status) {
@@ -128,23 +167,45 @@ export async function listListings(pagination, status) {
   return pageResponse(content.filter(Boolean), page, size, total);
 }
 
-export async function approveListing(listingId) {
+export async function approveListing(listingId, auditCtx) {
+  const before = await PropertyListing.findById(listingId);
+  if (!before) throw AppError.notFound('Listing not found');
   const listing = await PropertyListing.findByIdAndUpdate(
     listingId,
     { status: 'ACTIVE', publishedAt: new Date() },
     { new: true },
   );
-  if (!listing) throw AppError.notFound('Listing not found');
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'APPROVE',
+      entitySchema: 'listing',
+      entityId: listing._id,
+      entityReference: listing.listingReference ?? listing.title,
+      beforeState: { status: before.status },
+      afterState: { status: 'ACTIVE' },
+    });
+  }
   return listing;
 }
 
-export async function rejectListing(listingId, reason) {
+export async function rejectListing(listingId, reason, auditCtx) {
+  const before = await PropertyListing.findById(listingId);
+  if (!before) throw AppError.notFound('Listing not found');
   const listing = await PropertyListing.findByIdAndUpdate(
     listingId,
     { status: 'REJECTED', rejectionReason: reason },
     { new: true },
   );
-  if (!listing) throw AppError.notFound('Listing not found');
+  if (auditCtx) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'REJECT',
+      entitySchema: 'listing',
+      entityId: listing._id,
+      entityReference: listing.listingReference ?? listing.title,
+      beforeState: { status: before.status },
+      afterState: { status: 'REJECTED', reason },
+    });
+  }
   return listing;
 }
 
@@ -173,19 +234,6 @@ export async function getVerificationStats() {
     { $group: { _id: '$status', count: { $sum: 1 } } },
   ]);
   return Object.fromEntries(stats.map((s) => [s._id, s.count]));
-}
-
-export async function searchAuditLogs(pagination, filters = {}) {
-  const { page, size, skip } = pagination;
-  const query = {};
-  if (filters.actorId) query.actorId = filters.actorId;
-  if (filters.action) query.action = filters.action;
-  if (filters.entityTable) query.entityTable = filters.entityTable;
-  const [items, total] = await Promise.all([
-    AuditLog.find(query).sort({ occurredAt: -1 }).skip(skip).limit(size),
-    AuditLog.countDocuments(query),
-  ]);
-  return pageResponse(items, page, size, total);
 }
 
 export async function getDashboard() {

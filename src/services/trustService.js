@@ -1,6 +1,7 @@
 import { Complaint, ContactInquiry } from '../models/index.js';
 import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse } from '../utils/apiResponse.js';
+import * as auditService from './auditService.js';
 
 export async function submitComplaint(data) {
   const complaint = await Complaint.create({
@@ -54,12 +55,24 @@ export async function getComplaintStats() {
   return Object.fromEntries(stats.map((s) => [s._id, s.count]));
 }
 
-export async function updateComplaintStatus(complaintId, status) {
+export async function updateComplaintStatus(complaintId, status, auditCtx) {
+  const before = await Complaint.findById(complaintId);
   const complaint = await Complaint.findByIdAndUpdate(
     complaintId,
     { status },
     { new: true },
   );
+  if (auditCtx && complaint) {
+    const action = status === 'RESOLVED' ? 'APPROVE' : 'UPDATE';
+    await auditService.recordAudit(auditCtx, {
+      action,
+      entitySchema: 'complaint',
+      entityId: complaint._id,
+      entityReference: complaint.reference ?? complaint.subject,
+      beforeState: before ? { status: before.status } : undefined,
+      afterState: { status },
+    });
+  }
   return complaint;
 }
 
@@ -75,7 +88,19 @@ export async function listReferrals(pagination) {
   return pageResponse(items, page, size, total);
 }
 
-export async function updateReferralStatus(referralId, status) {
+export async function updateReferralStatus(referralId, status, auditCtx) {
   const { ContactRequest } = await import('../models/index.js');
-  return ContactRequest.findByIdAndUpdate(referralId, { status }, { new: true });
+  const before = await ContactRequest.findById(referralId);
+  const updated = await ContactRequest.findByIdAndUpdate(referralId, { status }, { new: true });
+  if (auditCtx && updated) {
+    await auditService.recordAudit(auditCtx, {
+      action: 'UPDATE',
+      entitySchema: 'referral',
+      entityId: updated._id,
+      entityReference: updated._id.toString(),
+      beforeState: before ? { status: before.status } : undefined,
+      afterState: { status },
+    });
+  }
+  return updated;
 }

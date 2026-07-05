@@ -10,6 +10,7 @@ import {
   PropertyImage,
   UserKycStatus,
   FeeSchedule,
+  AuditLog,
 } from '../models/index.js';
 import { DEFAULT_FEE_SCHEDULE } from '../constants/index.js';
 import {
@@ -79,8 +80,13 @@ async function seedFees() {
   }
 }
 
-async function replaceListingImages(listingId, sellerId, imageUrls) {
+async function replaceListingImages(listingId, sellerId, imageUrls = []) {
   await PropertyImage.updateMany({ listingId }, { active: false });
+
+  if (!imageUrls.length) {
+    console.log('    ✓ images cleared');
+    return;
+  }
 
   for (let index = 0; index < imageUrls.length; index += 1) {
     const url = imageUrls[index];
@@ -145,7 +151,7 @@ async function seedDemo() {
     }
   }
 
-  console.log('\nSeeding listings with photos...');
+  console.log('\nSeeding listings (no demo photos)...');
   for (const listing of DEMO_LISTINGS) {
     const seller = usersByKey.get(listing.sellerKey);
     if (!seller) {
@@ -159,7 +165,7 @@ async function seedDemo() {
     );
 
     console.log(`✓ ${listing.title}`);
-    await replaceListingImages(listingDoc._id, seller._id, listing.images);
+    await replaceListingImages(listingDoc._id, seller._id, listing.images ?? []);
   }
 
   console.log('\nDemo seed complete.');

@@ -6,7 +6,7 @@ import {
 import { AppError } from '../utils/errors.js';
 import { encryptPii, hashToken, generateSecureToken } from '../utils/crypto.js';
 import { generateAccessToken } from '../middleware/auth.js';
-import { sendVerificationEmail, sendPasswordResetEmail } from './emailService.js';
+import { sendVerificationEmail, sendPasswordResetEmail, isEmailEnabled } from './emailService.js';
 import { ROLES } from '../constants/index.js';
 
 const ROLE_MAP = {
@@ -115,22 +115,26 @@ export async function register(data) {
     lastName: data.lastName.trim(),
     nationalIdEnc: encryptPii(data.nationalId.trim()),
     dateOfBirth: data.dateOfBirth ? new Date(data.dateOfBirth) : undefined,
-    status: 'PENDING_VERIFICATION',
+    status: 'ACTIVE',
+    emailVerified: true,
+    phoneVerified: true,
     roles: [roleName],
   });
 
-  const verificationToken = await createEmailVerificationToken(user);
-  await sendVerificationEmail(user, verificationToken);
+  if (isEmailEnabled()) {
+    const verificationToken = await createEmailVerificationToken(user);
+    await sendVerificationEmail(user, verificationToken);
+  }
 
   await Notification.create({
     recipientId: user._id,
     channel: 'IN_APP',
     subject: 'Welcome to LandEx',
-    body: 'Your account has been created. Please verify your email to get started.',
+    body: 'Your account is ready. Sign in to get started.',
     templateCode: 'USER_REGISTERED',
   });
 
-  return { message: 'Registration successful. Please verify your email to activate your account.' };
+  return { message: 'Registration successful. You can sign in now.' };
 }
 
 export async function login(data, ipAddress, userAgent) {
@@ -198,7 +202,7 @@ export async function logout(userId, refreshToken) {
 
 export async function forgotPassword(data) {
   const user = await User.findOne({ email: data.email.toLowerCase(), deletedAt: null });
-  if (user) {
+  if (user && isEmailEnabled()) {
     const token = await createPasswordResetToken(user);
     await sendPasswordResetEmail(user, token);
   }
@@ -274,7 +278,13 @@ export async function resendVerification(data) {
   if (user.emailVerified) {
     throw AppError.badRequest('ALREADY_VERIFIED', 'Email is already verified');
   }
-  const token = await createEmailVerificationToken(user);
-  await sendVerificationEmail(user, token);
+  if (isEmailEnabled()) {
+    const token = await createEmailVerificationToken(user);
+    await sendVerificationEmail(user, token);
+  } else {
+    user.emailVerified = true;
+    if (user.status === 'PENDING_VERIFICATION') user.status = 'ACTIVE';
+    await user.save();
+  }
   return { message: 'Verification email sent' };
 }
