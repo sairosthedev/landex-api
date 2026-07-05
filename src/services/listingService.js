@@ -310,6 +310,13 @@ export async function listListingImages(listingId) {
 export async function getImageContent(imageId) {
   const image = await PropertyImage.findOne({ _id: imageId, active: true });
   if (!image) throw AppError.notFound('Image not found');
+  if (image.inlineData?.length) {
+    return {
+      buffer: image.inlineData,
+      contentType: image.contentType || 'image/jpeg',
+      filename: image.originalFilename || 'listing.jpg',
+    };
+  }
   const { objectStorage } = await import('./storageService.js');
   const buffer = await objectStorage.download(image.storageKey);
   return { buffer, contentType: image.contentType, filename: image.originalFilename };

@@ -98,6 +98,8 @@ See `.env.example` for the full list. Key variables:
 | `npm run dev` | Dev server with `--watch` |
 | `npm run seed` | Seed fee schedules |
 | `npm run seed:admin` | Create dev admin user (`admin@landex.local` / `Admin123!`) |
+| `npm run seed:demo` | Seed demo users, 6 active listings with photos (password `LandExDemo123!`) |
+| `npm run seed:all` | Run fee, admin, and demo seeds |
 | `npm run smoke` | Run API smoke tests |
 
 ## Frontend integration

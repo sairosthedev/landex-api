@@ -176,6 +176,7 @@ propertyListingSchema.index({ status: 1, province: 1, askingPrice: 1 });
 const propertyImageSchema = new Schema({
   listingId: { type: Schema.Types.ObjectId, ref: 'PropertyListing', required: true, index: true },
   storageKey: { type: String, required: true },
+  inlineData: Buffer,
   originalFilename: String,
   contentType: String,
   size: Number,

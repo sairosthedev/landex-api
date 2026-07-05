@@ -9,6 +9,8 @@
     "dev": "node --watch src/server.js",
     "seed": "node src/seeds/seed.js",
     "seed:admin": "node src/seeds/seed-admin.js",
+    "seed:demo": "node src/seeds/seed-demo.js",
+    "seed:all": "node src/seeds/seed.js && node src/seeds/seed-admin.js && node src/seeds/seed-demo.js",
     "smoke": "node scripts/smoke-test/smoke-test.js",
     "lint": "node --check src/server.js"
   },
