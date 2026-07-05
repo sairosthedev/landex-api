@@ -5,23 +5,39 @@ function isServerlessRuntime() {
   return Boolean(process.env.VERCEL || process.env.VERCEL_ENV || process.env.AWS_LAMBDA_FUNCTION_NAME);
 }
 
-export function useMongoKycStorage() {
+function useMongoStorage(mode) {
   if (isServerlessRuntime()) return true;
 
-  const mode = (config.storage.kycDocumentStorage || 'mongodb').toLowerCase();
-  if (mode === 'mongodb' || mode === 'mongo') return true;
-  return mode !== 'object' && mode !== 'local';
+  const normalized = (mode || 'mongodb').toLowerCase();
+  if (normalized === 'mongodb' || normalized === 'mongo') return true;
+  return normalized !== 'object' && normalized !== 'local';
 }
 
-export async function readKycDocumentBuffer(doc) {
+export function useMongoKycStorage() {
+  return useMongoStorage(config.storage.kycDocumentStorage);
+}
+
+export function useMongoPropertyDocumentStorage() {
+  return useMongoStorage(config.storage.listingDocumentStorage);
+}
+
+async function readStoredDocumentBuffer(doc, storageMode) {
   if (doc.inlineData?.length) {
     return doc.inlineData;
   }
   if (!doc.storageKey) {
-    throw new Error('KYC document has no stored content');
+    throw new Error('Document has no stored content');
   }
-  if (config.storage.kycDocumentStorage === 'object') {
+  if (storageMode === 'object') {
     return objectStorage.download(doc.storageKey);
   }
   return localFileStorage.read(doc.storageKey);
+}
+
+export async function readKycDocumentBuffer(doc) {
+  return readStoredDocumentBuffer(doc, config.storage.kycDocumentStorage);
+}
+
+export async function readPropertyDocumentBuffer(doc) {
+  return readStoredDocumentBuffer(doc, config.storage.listingDocumentStorage);
 }

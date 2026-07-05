@@ -122,6 +122,7 @@ Set `LISTING_IMAGE_STORAGE=object` only when `OBJECT_STORAGE_PROVIDER` is S3/Min
 | `PII_ENCRYPTION_KEY` | Base64 256-bit AES key |
 | `FRONTEND_BASE_URL` | `https://your-frontend.vercel.app` |
 | `LISTING_IMAGE_STORAGE` | `mongodb` |
+| `LISTING_DOCUMENT_STORAGE` | `mongodb` |
 | `KYC_DOCUMENT_STORAGE` | `mongodb` |
 | `STORAGE_BASE_PATH` | `/tmp/storage` (only if using local disk storage) |
 | `OBJECT_STORAGE_BUCKET` | `landex-documents` |

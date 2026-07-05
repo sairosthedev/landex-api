@@ -2,8 +2,14 @@ import path from 'path';
 import {
   PropertyDocument, PropertyListing, DocumentAccessLog,
 } from '../models/index.js';
+import config from '../config/index.js';
 import { AppError } from '../utils/errors.js';
-import { objectStorage } from './storageService.js';
+import { sha256 } from '../utils/crypto.js';
+import { localFileStorage, objectStorage } from './storageService.js';
+import {
+  readPropertyDocumentBuffer,
+  useMongoPropertyDocumentStorage,
+} from './kycDocumentStorage.js';
 
 function toDocumentResponse(doc) {
   return {
@@ -24,18 +30,33 @@ function toDocumentResponse(doc) {
 async function uploadDocument(userId, { listingId, sellerId, documentType, file }) {
   if (!file?.buffer?.length) throw AppError.badRequest('EMPTY_FILE', 'File is required');
 
-  const key = path.join(
+  const safeName = file.originalname.replace(/[^\w.-]+/g, '_');
+  const storageKey = path.join(
     listingId ? `listings/${listingId}` : `sellers/${sellerId || userId}`,
-    `${documentType}-${Date.now()}-${file.originalname}`,
+    `${documentType}-${Date.now()}-${safeName}`,
   );
-  const { storageKey, checksum } = await objectStorage.upload(key, file.buffer, file.mimetype);
+  const checksum = sha256(file.buffer);
+  const useMongo = useMongoPropertyDocumentStorage();
+
+  let inlineData;
+  let storedKey = storageKey;
+
+  if (useMongo) {
+    inlineData = file.buffer;
+  } else if (config.storage.listingDocumentStorage === 'object') {
+    const uploaded = await objectStorage.upload(storageKey, file.buffer, file.mimetype);
+    storedKey = uploaded.storageKey;
+  } else {
+    await localFileStorage.store(storageKey, file.buffer);
+  }
 
   const doc = await PropertyDocument.create({
     listingId,
     sellerId: sellerId || userId,
     uploadedBy: userId,
     documentType,
-    storageKey,
+    storageKey: storedKey,
+    inlineData,
     originalFilename: file.originalname,
     contentType: file.mimetype,
     size: file.size,
@@ -93,13 +114,19 @@ export async function downloadDocument(userId, documentId, ipAddress) {
   if (!doc) throw AppError.notFound('Document not found');
 
   await DocumentAccessLog.create({ documentId, userId, ipAddress });
-  const buffer = await objectStorage.download(doc.storageKey);
+  const buffer = await readPropertyDocumentBuffer(doc);
   return { buffer, contentType: doc.contentType, filename: doc.originalFilename };
 }
 
 export async function getPresignedUrl(userId, documentId) {
   const doc = await PropertyDocument.findOne({ _id: documentId, deletedAt: null });
   if (!doc) throw AppError.notFound('Document not found');
+  if (useMongoPropertyDocumentStorage() || doc.inlineData?.length) {
+    return {
+      url: `/api/v1/documents/${doc._id.toString()}/download`,
+      expiresInMinutes: 15,
+    };
+  }
   const url = await objectStorage.getPresignedUrl(doc.storageKey);
   return { url, expiresInMinutes: 15 };
 }

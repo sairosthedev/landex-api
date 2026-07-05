@@ -197,6 +197,7 @@ const propertyDocumentSchema = new Schema({
   documentType: { type: String, enum: DOCUMENT_TYPES, required: true },
   status: { type: String, default: 'UPLOADED' },
   storageKey: { type: String, required: true },
+  inlineData: Buffer,
   originalFilename: String,
   contentType: String,
   size: Number,
