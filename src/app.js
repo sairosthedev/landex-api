@@ -5,7 +5,7 @@ import helmet from 'helmet';
 import morgan from 'morgan';
 
 import { errorHandler, notFoundHandler } from './middleware/errorHandler.js';
-import { connectDatabase, isDatabaseConnected } from './config/database.js';
+import { connectDatabase, pingDatabase } from './config/database.js';
 import authRoutes from './routes/authRoutes.js';
 import userRoutes from './routes/userRoutes.js';
 import listingRoutes from './routes/listingRoutes.js';
@@ -31,15 +31,21 @@ app.use(cors({
 app.use(morgan('dev'));
 
 app.get('/health', async (_req, res) => {
+  const payload = {
+    status: 'UP',
+    timestamp: new Date().toISOString(),
+  };
+
   try {
-    await connectDatabase();
-    res.json({
-      status: 'UP',
-      db: isDatabaseConnected() ? 'connected' : 'disconnected',
-      timestamp: new Date().toISOString(),
-    });
+    const connected = await pingDatabase(5_000);
+    payload.db = connected ? 'connected' : 'disconnected';
+    if (!connected) {
+      payload.status = 'DEGRADED';
+      return res.status(503).json(payload);
+    }
+    return res.json(payload);
   } catch (err) {
-    res.status(503).json({
+    return res.status(503).json({
       status: 'DEGRADED',
       db: 'disconnected',
       message: err instanceof Error ? err.message : 'Database unavailable',

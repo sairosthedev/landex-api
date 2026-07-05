@@ -27,7 +27,8 @@ function isAtlasAllowFromAnywhere() {
 }
 
 function applyNetworkAndDnsPreferences() {
-  if (isAtlasAllowFromAnywhere()) {
+  const onVercel = Boolean(process.env.VERCEL);
+  if (isAtlasAllowFromAnywhere() || onVercel) {
     const servers = optionalEnv('MONGODB_DNS_SERVERS', '8.8.8.8,8.8.4.4,1.1.1.1')
       .split(',')
       .map((s) => s.trim())
@@ -45,9 +46,9 @@ function applyNetworkAndDnsPreferences() {
 function getMongoOptions(uri) {
   const onVercel = Boolean(process.env.VERCEL);
   const options = {
-    serverSelectionTimeoutMS: optionalInt('MONGODB_SERVER_SELECTION_TIMEOUT_MS', onVercel ? 20_000 : 30_000),
+    serverSelectionTimeoutMS: optionalInt('MONGODB_SERVER_SELECTION_TIMEOUT_MS', onVercel ? 8_000 : 30_000),
     socketTimeoutMS: optionalInt('MONGODB_SOCKET_TIMEOUT_MS', 45_000),
-    connectTimeoutMS: optionalInt('MONGODB_CONNECT_TIMEOUT_MS', onVercel ? 20_000 : 30_000),
+    connectTimeoutMS: optionalInt('MONGODB_CONNECT_TIMEOUT_MS', onVercel ? 8_000 : 30_000),
     maxPoolSize: optionalInt('MONGODB_MAX_POOL_SIZE', onVercel ? 1 : 10),
   };
 
@@ -79,6 +80,31 @@ function resetCache() {
 
 export function isDatabaseConnected() {
   return mongoose.connection.readyState === 1;
+}
+
+function withTimeout(promise, ms, label = 'operation') {
+  return Promise.race([
+    promise,
+    new Promise((_, reject) => {
+      setTimeout(() => reject(new Error(`${label} timed out after ${ms}ms`)), ms);
+    }),
+  ]);
+}
+
+/** Quick DB probe for /health — does not block the server boot. */
+export async function pingDatabase(timeoutMs = 5_000) {
+  try {
+    await withTimeout(connectDatabase(), timeoutMs, 'MongoDB connect');
+    return isDatabaseConnected();
+  } catch (err) {
+    resetCache();
+    try {
+      await mongoose.disconnect();
+    } catch {
+      /* ignore */
+    }
+    throw err;
+  }
 }
 
 export async function connectDatabase() {
