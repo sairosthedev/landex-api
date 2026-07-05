@@ -1,0 +1,140 @@
+name: landex-mern
+
+services:
+  mongodb:
+    image: mongo:7.0
+    container_name: landex-mern-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-landex}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:?MONGO_ROOT_PASSWORD is required}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-landex}
+    volumes:
+      - mongodb_data:/data/db
+    ports:
+      - "${MONGO_PUBLISH_PORT:-27017}:27017"
+    networks:
+      - landex-mern-net
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  redis:
+    image: redis:7.4-alpine
+    container_name: landex-mern-redis
+    restart: unless-stopped
+    command: >
+      sh -c 'redis-server
+      --requirepass "$${REDIS_PASSWORD}"
+      --appendonly yes
+      --maxmemory 256mb
+      --maxmemory-policy allkeys-lru'
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required}
+    volumes:
+      - redis_data:/data
+    ports:
+      - "${REDIS_PUBLISH_PORT:-6379}:6379"
+    networks:
+      - landex-mern-net
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$$REDIS_PASSWORD\" ping | grep PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  minio:
+    image: minio/minio:RELEASE.2024-12-18T13-15-44Z
+    container_name: landex-mern-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-landex_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?MINIO_ROOT_PASSWORD is required}
+    volumes:
+      - minio_data:/data
+    ports:
+      - "${MINIO_API_PUBLISH_PORT:-9000}:9000"
+      - "${MINIO_CONSOLE_PUBLISH_PORT:-9001}:9001"
+    networks:
+      - landex-mern-net
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+
+  minio-init:
+    image: minio/mc:RELEASE.2024-12-18T13-15-44Z
+    container_name: landex-mern-minio-init
+    depends_on:
+      minio:
+        condition: service_started
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-landex_minio}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      OBJECT_STORAGE_BUCKET: ${OBJECT_STORAGE_BUCKET:-landex-documents}
+      OBJECT_STORAGE_ENDPOINT: ${OBJECT_STORAGE_ENDPOINT:?OBJECT_STORAGE_ENDPOINT is required}
+    entrypoint: >
+      /bin/sh -c "
+      until mc alias set landex $$OBJECT_STORAGE_ENDPOINT $$MINIO_ROOT_USER $$MINIO_ROOT_PASSWORD 2>/dev/null; do
+        echo 'Waiting for MinIO...';
+        sleep 2;
+      done;
+      mc mb --ignore-existing landex/$$OBJECT_STORAGE_BUCKET;
+      mc anonymous set none landex/$$OBJECT_STORAGE_BUCKET;
+      echo 'MinIO bucket ready:' $$OBJECT_STORAGE_BUCKET;
+      "
+    networks:
+      - landex-mern-net
+    restart: "no"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${LANDEX_MERN_API_IMAGE:-landex-mern-api:latest}
+    container_name: landex-mern-api
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - app_storage:/data/storage
+    ports:
+      - "${API_PUBLISH_PORT:-8080}:8080"
+    networks:
+      - landex-mern-net
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+      minio-init:
+        condition: service_completed_successfully
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+networks:
+  landex-mern-net:
+    driver: bridge
+
+volumes:
+  mongodb_data:
+    name: landex_mern_mongodb_data
+  redis_data:
+    name: landex_mern_redis_data
+  minio_data:
+    name: landex_mern_minio_data
+  app_storage:
+    name: landex_mern_app_storage
