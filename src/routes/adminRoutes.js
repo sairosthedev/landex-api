@@ -42,6 +42,7 @@ router.get('/users/:userId/kyc/documents/:documentId/download', ...adminOnly, as
   const { buffer, contentType, filename } = await adminService.downloadKycDocument(req.params.documentId);
   res.set('Content-Type', contentType);
   res.set('Content-Disposition', `attachment; filename="${filename}"`);
+  res.set('Cross-Origin-Resource-Policy', 'cross-origin');
   res.send(buffer);
 });
 

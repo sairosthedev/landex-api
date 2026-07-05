@@ -22,7 +22,10 @@ import adminRoutes from './routes/adminRoutes.js';
 
 const app = express();
 
-app.use(helmet());
+app.use(helmet({
+  // Allow <img> loads from the Vercel frontend (different origin than this API).
+  crossOriginResourcePolicy: { policy: 'cross-origin' },
+}));
 app.use(cors({
   origin: true,
   credentials: true,

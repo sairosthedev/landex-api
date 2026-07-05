@@ -39,7 +39,13 @@ export async function listUsers(pagination, filters = {}) {
   const { page, size, skip } = pagination;
   const query = { deletedAt: null };
   if (filters.status) query.status = filters.status;
-  if (filters.role) query.roles = filters.role;
+  if (filters.role) {
+    const role = String(filters.role).startsWith('ROLE_')
+      ? String(filters.role)
+      : `ROLE_${String(filters.role).toUpperCase()}`;
+    query.roles = role;
+  }
+  if (filters.email) query.email = new RegExp(`^${String(filters.email).replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}$`, 'i');
   if (filters.keyword) {
     query.$or = [
       { email: new RegExp(filters.keyword, 'i') },
