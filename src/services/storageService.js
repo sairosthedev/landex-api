@@ -24,7 +24,7 @@ function getS3Client() {
 
 export class LocalFileStorageService {
   constructor(basePath = config.storage.basePath) {
-    this.basePath = basePath;
+    this.basePath = basePath || (process.env.VERCEL ? '/tmp/storage' : './storage');
   }
 
   async ensureDir(dir) {

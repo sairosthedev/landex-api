@@ -7,7 +7,9 @@ export function requireEnv(name) {
 }
 
 export function optionalEnv(name, fallback = '') {
-  return process.env[name] ?? fallback;
+  const value = process.env[name];
+  if (value === undefined || value === '') return fallback;
+  return value;
 }
 
 export function optionalInt(name, fallback) {

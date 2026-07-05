@@ -43,7 +43,7 @@ const config = {
     maxKycFileSizeBytes: optionalInt('STORAGE_MAX_KYC_FILE_SIZE_BYTES', 10_485_760),
     /** mongodb = inline bytes in Atlas (works on Vercel). object = S3/MinIO. local = disk under STORAGE_BASE_PATH */
     listingImageStorage: optionalEnv('LISTING_IMAGE_STORAGE', 'mongodb'),
-    kycDocumentStorage: optionalEnv('KYC_DOCUMENT_STORAGE', optionalEnv('LISTING_IMAGE_STORAGE', 'mongodb')),
+    kycDocumentStorage: optionalEnv('KYC_DOCUMENT_STORAGE', 'mongodb'),
   },
 
   objectStorage: {
