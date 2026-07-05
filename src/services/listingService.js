@@ -4,6 +4,8 @@ import {
 import { AppError } from '../utils/errors.js';
 import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse, resolveSortField } from '../utils/apiResponse.js';
+import config from '../config/index.js';
+import { sha256 } from '../utils/crypto.js';
 
 const SORT_ALIASES = { price: 'askingPrice', size: 'areaSqm' };
 
@@ -273,14 +275,27 @@ export async function uploadListingImage(userId, listingId, file, altText) {
   const listing = await PropertyListing.findOne({ _id: listingId, deletedAt: null });
   if (!listing) throw AppError.notFound('Listing not found');
 
-  const { objectStorage } = await import('./storageService.js');
-  const key = `listings/${listingId}/${Date.now()}-${file.originalname}`;
-  const { storageKey, checksum } = await objectStorage.upload(key, file.buffer, file.mimetype);
-
   const count = await PropertyImage.countDocuments({ listingId, active: true });
+  const filename = `${Date.now()}-${file.originalname}`;
+  const checksum = sha256(file.buffer);
+  const useMongoImages = config.storage.listingImageStorage !== 'object';
+
+  let storageKey = `inline/listings/${listingId}/${filename}`;
+  let inlineData;
+
+  if (useMongoImages) {
+    inlineData = file.buffer;
+  } else {
+    const { objectStorage } = await import('./storageService.js');
+    const key = `listings/${listingId}/${filename}`;
+    const uploaded = await objectStorage.upload(key, file.buffer, file.mimetype);
+    storageKey = uploaded.storageKey;
+  }
+
   const image = await PropertyImage.create({
     listingId,
     storageKey,
+    inlineData,
     originalFilename: file.originalname,
     contentType: file.mimetype,
     size: file.size,

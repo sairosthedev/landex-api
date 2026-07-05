@@ -41,6 +41,8 @@ const config = {
   storage: {
     basePath: optionalEnv('STORAGE_BASE_PATH'),
     maxKycFileSizeBytes: optionalInt('STORAGE_MAX_KYC_FILE_SIZE_BYTES', 10_485_760),
+    /** mongodb = free inline bytes in Atlas (good for Vercel). object = S3/MinIO disk. */
+    listingImageStorage: optionalEnv('LISTING_IMAGE_STORAGE', 'mongodb'),
   },
 
   objectStorage: {

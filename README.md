@@ -100,6 +100,12 @@ See `.env.example` for the full list. Key variables:
 | `npm run seed:admin` | Create dev admin user (`admin@landex.local` / `Admin123!`) |
 | `npm run seed:demo` | Seed demo users, 6 active listings with photos (password `LandExDemo123!`) |
 | `npm run seed:all` | Run fee, admin, and demo seeds |
+
+### Listing photos (free on Vercel)
+
+Default `LISTING_IMAGE_STORAGE=mongodb` stores image bytes in MongoDB Atlas (free tier friendly).
+No S3 or `uploads/` folder required. Seller uploads work on serverless deployments.
+Set `LISTING_IMAGE_STORAGE=object` only when `OBJECT_STORAGE_PROVIDER` is S3/MinIO.
 | `npm run smoke` | Run API smoke tests |
 
 ## Frontend integration
