@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { success } from '../utils/apiResponse.js';
+import { success, parsePagination } from '../utils/apiResponse.js';
 import { requireAuth, requireRoles, resolveClientIp } from '../middleware/auth.js';
 import { documentUpload } from '../middleware/upload.js';
 import * as documentService from '../services/documentService.js';
@@ -37,7 +37,9 @@ router.get('/:id', requireAuth, async (req, res) => {
 });
 
 router.get('/', requireAuth, async (req, res) => {
-  res.json(success(await documentService.listDocuments(req.user.id, req.query)));
+  const pagination = parsePagination(req.query);
+  const page = await documentService.listDocuments(req.user.id, req.query, pagination);
+  res.json(success(page));
 });
 
 router.get('/:id/download', requireAuth, async (req, res) => {

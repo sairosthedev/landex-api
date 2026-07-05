@@ -4,6 +4,7 @@ import {
 } from '../models/index.js';
 import config from '../config/index.js';
 import { AppError } from '../utils/errors.js';
+import { pageResponse } from '../utils/apiResponse.js';
 import { sha256 } from '../utils/crypto.js';
 import { localFileStorage, objectStorage } from './storageService.js';
 import {
@@ -24,6 +25,7 @@ function toDocumentResponse(doc) {
     isPublic: doc.isPublic,
     virusScanStatus: doc.virusScanStatus,
     createdAt: doc.createdAt,
+    uploadedAt: doc.createdAt,
   };
 }
 
@@ -101,12 +103,21 @@ export async function getDocument(userId, documentId) {
   return toDocumentResponse(doc);
 }
 
-export async function listDocuments(userId, filters = {}) {
+export async function listDocuments(userId, filters = {}, pagination = {}) {
+  const page = pagination.page ?? 0;
+  const size = pagination.size ?? 20;
+  const skip = pagination.skip ?? page * size;
+
   const query = { deletedAt: null, uploadedBy: userId };
   if (filters.listingId) query.listingId = filters.listingId;
   if (filters.documentType) query.documentType = filters.documentType;
-  const docs = await PropertyDocument.find(query).sort({ createdAt: -1 });
-  return docs.map(toDocumentResponse);
+
+  const [docs, total] = await Promise.all([
+    PropertyDocument.find(query).sort({ createdAt: -1 }).skip(skip).limit(size),
+    PropertyDocument.countDocuments(query),
+  ]);
+
+  return pageResponse(docs.map(toDocumentResponse), page, size, total);
 }
 
 export async function downloadDocument(userId, documentId, ipAddress) {
