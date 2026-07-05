@@ -81,10 +81,6 @@ export const DEMO_LISTINGS = [
     titleType: 'Title Deed',
     featured: true,
     verified: true,
-    images: [
-      'https://images.unsplash.com/photo-1560518883-ce09059eeffa?auto=format&fit=crop&w=1400&q=80',
-      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80',
-    ],
   },
   {
     reference: 'LST-DEMO-GOROMONZI',
@@ -103,10 +99,6 @@ export const DEMO_LISTINGS = [
     titleType: 'Offer Letter',
     featured: true,
     verified: true,
-    images: [
-      'https://images.unsplash.com/photo-1500382017468-9049fed747ef?auto=format&fit=crop&w=1400&q=80',
-      'https://images.unsplash.com/photo-1625246333195-78d9c38ad449?auto=format&fit=crop&w=1400&q=80',
-    ],
   },
   {
     reference: 'LST-DEMO-MTHAMPDEN',
@@ -125,10 +117,6 @@ export const DEMO_LISTINGS = [
     titleType: 'Agreement of Sale',
     featured: true,
     verified: false,
-    images: [
-      'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1400&q=80',
-      'https://images.unsplash.com/photo-1497366216548-37526070297c?auto=format&fit=crop&w=1400&q=80',
-    ],
   },
   {
     reference: 'LST-DEMO-CHIVERO',
@@ -147,10 +135,6 @@ export const DEMO_LISTINGS = [
     titleType: 'Title Deed',
     featured: false,
     verified: true,
-    images: [
-      'https://images.unsplash.com/photo-1448630360428-65456885c650?auto=format&fit=crop&w=1400&q=80',
-      'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?auto=format&fit=crop&w=1400&q=80',
-    ],
   },
   {
     reference: 'LST-DEMO-COWDRAY',
@@ -169,9 +153,6 @@ export const DEMO_LISTINGS = [
     titleType: 'Cession',
     featured: false,
     verified: false,
-    images: [
-      'https://images.unsplash.com/photo-1600607687939-ce8a6c25118c?auto=format&fit=crop&w=1400&q=80',
-    ],
   },
   {
     reference: 'LST-DEMO-VUMBA',
@@ -190,10 +171,6 @@ export const DEMO_LISTINGS = [
     titleType: 'Agreement of Sale',
     featured: false,
     verified: false,
-    images: [
-      'https://images.unsplash.com/photo-1501594907352-04cda38ebc29?auto=format&fit=crop&w=1400&q=80',
-      'https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?auto=format&fit=crop&w=1400&q=80',
-    ],
   },
 ];
 

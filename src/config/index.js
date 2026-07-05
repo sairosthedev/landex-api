@@ -41,8 +41,9 @@ const config = {
   storage: {
     basePath: optionalEnv('STORAGE_BASE_PATH'),
     maxKycFileSizeBytes: optionalInt('STORAGE_MAX_KYC_FILE_SIZE_BYTES', 10_485_760),
-    /** mongodb = free inline bytes in Atlas (good for Vercel). object = S3/MinIO disk. */
+    /** mongodb = inline bytes in Atlas (works on Vercel). object = S3/MinIO. local = disk under STORAGE_BASE_PATH */
     listingImageStorage: optionalEnv('LISTING_IMAGE_STORAGE', 'mongodb'),
+    kycDocumentStorage: optionalEnv('KYC_DOCUMENT_STORAGE', optionalEnv('LISTING_IMAGE_STORAGE', 'mongodb')),
   },
 
   objectStorage: {
@@ -107,7 +108,20 @@ const REQUIRED_FOR_SERVER = [
 ];
 
 export function validateConfig() {
-  for (const name of REQUIRED_FOR_SERVER) {
+  const needsLocalDisk =
+    config.storage.listingImageStorage === 'local'
+    || config.storage.kycDocumentStorage === 'local'
+    || config.objectStorage.provider === 'local';
+
+  const required = [...REQUIRED_FOR_SERVER];
+  if (!needsLocalDisk) {
+    const diskOnly = new Set(['STORAGE_BASE_PATH', 'OBJECT_STORAGE_BUCKET']);
+    for (let i = required.length - 1; i >= 0; i -= 1) {
+      if (diskOnly.has(required[i])) required.splice(i, 1);
+    }
+  }
+
+  for (const name of required) {
     requireEnv(name);
   }
 

@@ -5,6 +5,7 @@ import {
 import { AppError } from '../utils/errors.js';
 import { pageResponse } from '../utils/apiResponse.js';
 import { localFileStorage } from './storageService.js';
+import { readKycDocumentBuffer } from './kycDocumentStorage.js';
 import * as listingService from './listingService.js';
 import * as paymentService from './paymentService.js';
 import * as auditService from './auditService.js';
@@ -111,7 +112,7 @@ export async function listKycDocuments(userId) {
 export async function downloadKycDocument(documentId) {
   const doc = await KycDocument.findById(documentId);
   if (!doc) throw AppError.notFound('Document not found');
-  const buffer = await localFileStorage.read(doc.storageKey);
+  const buffer = await readKycDocumentBuffer(doc);
   return { buffer, contentType: doc.contentType, filename: doc.originalFilename };
 }
 

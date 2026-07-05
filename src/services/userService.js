@@ -1,10 +1,10 @@
-import path from 'path';
 import {
   User, KycDocument, UserKycStatus, RefreshToken,
 } from '../models/index.js';
 import { AppError } from '../utils/errors.js';
 import { decryptPii, sha256 } from '../utils/crypto.js';
-import { localFileStorage } from './storageService.js';
+import { objectStorage } from './storageService.js';
+import { useMongoKycStorage } from './kycDocumentStorage.js';
 import config from '../config/index.js';
 import { REQUIRED_KYC_DOCUMENTS } from '../constants/index.js';
 
@@ -74,18 +74,34 @@ export async function uploadKycDocument(userId, documentType, file) {
     throw AppError.conflict('Document type already uploaded');
   }
 
-  const storageKey = path.join('kyc', userId, `${documentType}-${Date.now()}-${file.originalname}`);
-  await localFileStorage.store(storageKey, file.buffer);
+  const checksum = sha256(file.buffer);
+  const safeName = file.originalname.replace(/[^\w.-]+/g, '_');
+  const storageKey = `kyc/${userId}/${documentType}-${Date.now()}-${safeName}`;
+  const useMongo = useMongoKycStorage();
+
+  let inlineData;
+  let storedKey = storageKey;
+
+  if (useMongo) {
+    inlineData = file.buffer;
+  } else if (config.storage.kycDocumentStorage === 'object') {
+    const uploaded = await objectStorage.upload(storageKey, file.buffer, file.mimetype);
+    storedKey = uploaded.storageKey;
+  } else {
+    const { localFileStorage } = await import('./storageService.js');
+    await localFileStorage.store(storageKey, file.buffer);
+  }
 
   const doc = await KycDocument.create({
     userId,
     documentType,
     status: 'UPLOADED',
-    storageKey,
+    storageKey: storedKey,
+    inlineData,
     originalFilename: file.originalname,
     contentType: file.mimetype,
     size: file.size,
-    sha256: sha256(file.buffer),
+    sha256: checksum,
   });
 
   await UserKycStatus.findOneAndUpdate(

@@ -10,6 +10,8 @@
     "seed": "node src/seeds/seed.js",
     "seed:admin": "node src/seeds/seed-admin.js",
     "seed:demo": "node src/seeds/seed-demo.js",
+    "images:clear-live": "node scripts/remove-live-listing-images.js",
+    "smoke:clean": "node scripts/remove-smoke-test-records.js",
     "seed:all": "node src/seeds/seed.js && node src/seeds/seed-admin.js && node src/seeds/seed-demo.js",
     "smoke": "node scripts/smoke-test/smoke-test.js",
     "lint": "node --check src/server.js"

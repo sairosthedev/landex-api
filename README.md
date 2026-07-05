@@ -121,10 +121,11 @@ Set `LISTING_IMAGE_STORAGE=object` only when `OBJECT_STORAGE_PROVIDER` is S3/Min
 | `JWT_SECRET` | min 32 chars |
 | `PII_ENCRYPTION_KEY` | Base64 256-bit AES key |
 | `FRONTEND_BASE_URL` | `https://your-frontend.vercel.app` |
-| `STORAGE_BASE_PATH` | `/tmp/storage` |
+| `LISTING_IMAGE_STORAGE` | `mongodb` |
+| `KYC_DOCUMENT_STORAGE` | `mongodb` |
+| `STORAGE_BASE_PATH` | `/tmp/storage` (only if using local disk storage) |
 | `OBJECT_STORAGE_BUCKET` | `landex-documents` |
 | `NOTIFICATION_FROM_EMAIL` | `dev@landex.local` |
-| `LISTING_IMAGE_STORAGE` | `mongodb` |
 
 3. In **MongoDB Atlas → Network Access**, allow `0.0.0.0/0` (required for Vercel)
 4. Redeploy after env changes

@@ -82,6 +82,7 @@ const kycDocumentSchema = new Schema({
   documentType: { type: String, enum: KYC_DOCUMENT_TYPES, required: true },
   status: { type: String, default: 'UPLOADED' },
   storageKey: String,
+  inlineData: Buffer,
   originalFilename: String,
   contentType: String,
   size: Number,
