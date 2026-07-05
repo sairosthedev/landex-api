@@ -36,8 +36,12 @@ app.get('/health', async (_req, res) => {
     timestamp: new Date().toISOString(),
   };
 
+  if (process.env.VERCEL) {
+    return res.json({ ...payload, db: 'skipped' });
+  }
+
   try {
-    const connected = await pingDatabase(5_000);
+    const connected = await pingDatabase(3_000);
     payload.db = connected ? 'connected' : 'disconnected';
     if (!connected) {
       payload.status = 'DEGRADED';
