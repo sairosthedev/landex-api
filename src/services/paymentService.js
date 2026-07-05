@@ -2,7 +2,7 @@ import config from '../config/index.js';
 import {
   FeeSchedule, Invoice, Payment, PaymentWebhookEvent, ReconciliationRun, Notification,
 } from '../models/index.js';
-import { DEFAULT_FEE_SCHEDULE } from '../constants/index.js';
+import { DEFAULT_FEE_SCHEDULE, PAYMENT_METHODS } from '../constants/index.js';
 import { AppError } from '../utils/errors.js';
 import { generateReference } from '../utils/referenceGenerator.js';
 import { pageResponse } from '../utils/apiResponse.js';
@@ -31,6 +31,18 @@ function resolveReferenceType(data) {
     return PURPOSE_TO_REFERENCE_TYPE[String(data.purpose).toUpperCase()] ?? 'LISTING';
   }
   return 'LISTING';
+}
+
+function normalizePaymentMethod(input = {}) {
+  const raw = typeof input === 'string' ? input : (input.method || input.gateway);
+  const upper = String(raw || 'PAYNOW').toUpperCase();
+  const aliases = {
+    ECOCASH: 'PAYNOW',
+    INNBUCKS: 'PAYNOW',
+    CARD: 'STRIPE',
+  };
+  const mapped = aliases[upper] ?? upper;
+  return PAYMENT_METHODS.includes(mapped) ? mapped : 'PAYNOW';
 }
 
 export async function ensureDefaultFeeSchedules() {
@@ -103,10 +115,12 @@ export async function getInvoice(userId, invoiceId) {
   return toInvoiceResponse(invoice);
 }
 
-export async function initiatePayment(userId, invoiceId, method) {
+export async function initiatePayment(userId, invoiceId, input = {}) {
   const invoice = await Invoice.findOne({ _id: invoiceId, payerId: userId });
   if (!invoice) throw AppError.notFound('Invoice not found');
   if (invoice.status === 'PAID') throw AppError.badRequest('ALREADY_PAID', 'Invoice is already paid');
+
+  const method = normalizePaymentMethod(input);
 
   const payment = await Payment.create({
     paymentReference: generateReference('payment'),
@@ -114,9 +128,9 @@ export async function initiatePayment(userId, invoiceId, method) {
     payerId: userId,
     amount: invoice.amount,
     currency: invoice.currency,
-    method: method || 'PAYNOW',
+    method,
     status: 'PENDING',
-    gatewayProvider: method || 'PAYNOW',
+    gatewayProvider: method,
   });
 
   if (method === 'STRIPE' && config.payment.stripe.secretKey) {

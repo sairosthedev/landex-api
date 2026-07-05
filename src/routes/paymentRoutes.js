@@ -20,7 +20,7 @@ router.get('/invoices/:id', requireAuth, async (req, res) => {
 });
 
 router.post('/invoices/:id/pay', requireAuth, async (req, res) => {
-  res.json(success(await paymentService.initiatePayment(req.user.id, req.params.id, req.body.method)));
+  res.json(success(await paymentService.initiatePayment(req.user.id, req.params.id, req.body)));
 });
 
 router.get('/:id', requireAuth, async (req, res) => {
