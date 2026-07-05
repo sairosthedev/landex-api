@@ -14,7 +14,7 @@ router.post('/', requireAuth, submitterRoles, async (req, res) => {
 });
 
 router.get('/queue', requireAuth, reviewerRoles, async (req, res) => {
-  res.json(success(await verificationService.getQueue(parsePagination(req.query))));
+  res.json(success(await verificationService.getQueue(parsePagination(req.query), req.query)));
 });
 
 router.get('/mine', requireAuth, submitterRoles, async (req, res) => {

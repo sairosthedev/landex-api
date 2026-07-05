@@ -9,6 +9,7 @@ import { readKycDocumentBuffer } from './kycDocumentStorage.js';
 import * as listingService from './listingService.js';
 import * as paymentService from './paymentService.js';
 import * as auditService from './auditService.js';
+import * as verificationService from './verificationService.js';
 
 function toAdminUserResponse(user, kycStatus) {
   const fullName = [user.firstName, user.lastName].filter(Boolean).join(' ').trim() || user.email;
@@ -220,14 +221,8 @@ export async function withdrawListing(listingId) {
   return listing;
 }
 
-export async function getVerificationQueue(pagination) {
-  const { page, size, skip } = pagination;
-  const filter = { status: { $in: ['SUBMITTED', 'UNDER_REVIEW'] } };
-  const [items, total] = await Promise.all([
-    VerificationRequest.find(filter).sort({ submittedAt: 1 }).skip(skip).limit(size),
-    VerificationRequest.countDocuments(filter),
-  ]);
-  return pageResponse(items, page, size, total);
+export async function getVerificationQueue(pagination, filters = {}) {
+  return verificationService.getQueue(pagination, filters);
 }
 
 export async function getVerificationStats() {

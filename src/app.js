@@ -65,6 +65,11 @@ app.use(async (req, res, next) => {
   if (!req.path.startsWith('/api/')) return next();
   try {
     await connectDatabase();
+    if (!app.locals.verificationRepairDone) {
+      const { repairSubmittedListingStatuses } = await import('./services/verificationService.js');
+      await repairSubmittedListingStatuses();
+      app.locals.verificationRepairDone = true;
+    }
     next();
   } catch (err) {
     next(err);

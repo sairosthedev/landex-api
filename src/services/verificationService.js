@@ -1,5 +1,6 @@
 import {
   VerificationRequest, VerificationStatusHistory, VerificationDocument,
+  PropertyListing, User,
 } from '../models/index.js';
 import { AppError } from '../utils/errors.js';
 import { generateReference } from '../utils/referenceGenerator.js';
@@ -10,6 +11,7 @@ function toResponse(req) {
   return {
     id: req._id.toString(),
     requestReference: req.requestReference,
+    reference: req.requestReference,
     verificationType: req.verificationType,
     status: req.status,
     listingId: req.listingId?.toString(),
@@ -26,6 +28,59 @@ function toResponse(req) {
   };
 }
 
+async function enrichVerificationResponse(req) {
+  const response = toResponse(req);
+  if (req.listingId) {
+    const listing = await PropertyListing.findById(req.listingId).select(
+      'title province district tenureType listingReference sellerId status',
+    );
+    if (listing) {
+      response.listingTitle = listing.title;
+      response.listingReference = listing.listingReference;
+      response.province = listing.province;
+      response.district = listing.district;
+      response.tenureType = listing.tenureType;
+      response.listingStatus = listing.status;
+      if (!response.sellerId) response.sellerId = listing.sellerId?.toString();
+    }
+  }
+
+  const sellerId = response.sellerId ?? req.requestedBy?.toString();
+  if (sellerId) {
+    const seller = await User.findById(sellerId).select('firstName lastName email');
+    if (seller) {
+      response.sellerName = [seller.firstName, seller.lastName].filter(Boolean).join(' ').trim() || seller.email;
+      response.sellerEmail = seller.email;
+    }
+  }
+
+  return response;
+}
+
+export async function repairSubmittedListingStatuses() {
+  const requests = await VerificationRequest.find({
+    verificationType: 'LISTING',
+    status: { $in: ['SUBMITTED', 'UNDER_REVIEW'] },
+    listingId: { $ne: null },
+  }).select('listingId');
+
+  await Promise.all(requests.map((request) => PropertyListing.updateOne(
+    { _id: request.listingId, deletedAt: null, status: 'DRAFT' },
+    { status: 'PENDING_REVIEW' },
+  )));
+}
+
+async function linkVerificationDocuments(requestId, documentIds = []) {
+  for (const documentId of documentIds) {
+    if (!documentId) continue;
+    await VerificationDocument.findOneAndUpdate(
+      { verificationRequestId: requestId, documentId },
+      { verificationRequestId: requestId, documentId },
+      { upsert: true },
+    );
+  }
+}
+
 async function recordStatusChange(requestId, fromStatus, toStatus, changedBy, reason) {
   await VerificationStatusHistory.create({
     verificationRequestId: requestId,
@@ -37,27 +92,40 @@ async function recordStatusChange(requestId, fromStatus, toStatus, changedBy, re
 }
 
 export async function createRequest(userId, data) {
+  let sellerId = data.sellerId;
+  if (data.listingId) {
+    const listing = await PropertyListing.findOne({ _id: data.listingId, deletedAt: null });
+    if (!listing) throw AppError.notFound('Listing not found');
+    sellerId = listing.sellerId;
+  }
+
   const request = await VerificationRequest.create({
     requestReference: generateReference('verification'),
     verificationType: data.verificationType,
     listingId: data.listingId,
-    sellerId: data.sellerId,
+    sellerId,
     requestedBy: userId,
     priority: data.priority || 'NORMAL',
     notes: data.notes,
     metadata: data.metadata,
   });
+
+  await linkVerificationDocuments(request._id, data.documentIds);
+
   return toResponse(request);
 }
 
-export async function getQueue(pagination) {
+export async function getQueue(pagination, filters = {}) {
   const { page, size, skip } = pagination;
   const filter = { status: { $in: ['SUBMITTED', 'UNDER_REVIEW'] } };
+  if (filters.status) filter.status = filters.status;
+  if (filters.type) filter.verificationType = filters.type;
   const [items, total] = await Promise.all([
     VerificationRequest.find(filter).sort({ priority: -1, submittedAt: 1 }).skip(skip).limit(size),
     VerificationRequest.countDocuments(filter),
   ]);
-  return pageResponse(items.map(toResponse), page, size, total);
+  const content = await Promise.all(items.map(enrichVerificationResponse));
+  return pageResponse(content, page, size, total);
 }
 
 export async function getMyRequests(userId, pagination) {
@@ -85,6 +153,14 @@ export async function submit(userId, requestId) {
   request.submittedAt = new Date();
   await request.save();
   await recordStatusChange(requestId, from, 'SUBMITTED', userId);
+
+  if (request.verificationType === 'LISTING' && request.listingId) {
+    await PropertyListing.findOneAndUpdate(
+      { _id: request.listingId, deletedAt: null, status: 'DRAFT' },
+      { status: 'PENDING_REVIEW' },
+    );
+  }
+
   return toResponse(request);
 }
 

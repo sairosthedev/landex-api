@@ -80,7 +80,7 @@ router.post('/listings/:id/withdraw', ...adminOnly, async (req, res) => {
 
 // Verifications
 router.get('/verifications/queue', ...adminOnly, async (req, res) => {
-  res.json(success(await adminService.getVerificationQueue(parsePagination(req.query))));
+  res.json(success(await adminService.getVerificationQueue(parsePagination(req.query), req.query)));
 });
 
 router.get('/verifications/stats', ...adminOnly, async (req, res) => {
